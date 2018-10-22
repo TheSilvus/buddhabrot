@@ -1,0 +1,6 @@
+[package]
+name = "mandelbuddha"
+version = "0.1.0"
+authors = ["silvus"]
+
+[dependencies]
