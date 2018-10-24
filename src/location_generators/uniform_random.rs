@@ -38,12 +38,18 @@ impl UniformRandomLocationGenerator {
 }
 
 impl ::location_generators::LocationGenerator<Complex64> for UniformRandomLocationGenerator {
-    fn next_task(&mut self) -> Option<Complex64> {
+    fn next_location(&mut self) -> Option<Complex64> {
         self.section_current += 1;
         if self.section_current >= self.section_total {
             let current = self.current.load(Ordering::Relaxed) + self.section_total;
 
-            if current > self.total {
+            println!(
+                "Finished section {}/{}",
+                current / self.section_total,
+                self.total / self.section_total
+            );
+
+            if current >= self.total {
                 return None;
             }
 
