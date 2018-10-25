@@ -7,6 +7,8 @@ use std::slice;
 use num::complex::Complex64;
 
 use math;
+use vec;
+use file;
 
 pub struct FileAggregator {
     file: File,
@@ -41,14 +43,13 @@ impl FileAggregator {
             file_buffer_size,
             pixel_buffer_cutoff_size,
 
-            file_buffer: Vec::with_capacity(file_buffer_size),
+            file_buffer: vec::filled_with(&0, file_buffer_size),
 
-            pixel_buffers: Vec::with_capacity(
+            pixel_buffers: vec::filled_with(&Vec::new(),
                 (file_width * file_height / file_buffer_size as u64) as usize + 1,
             ),
         };
 
-        aggregator.fill_buffers();
         aggregator.setup_file()?;
 
         Ok(aggregator)
@@ -82,15 +83,6 @@ impl FileAggregator {
         )
     }
 
-    fn fill_buffers(&mut self) {
-        for _ in 0..self.file_buffer.capacity() {
-            self.file_buffer.push(0);
-        }
-
-        for _ in 0..self.pixel_buffers.capacity() {
-            self.pixel_buffers.push(Vec::new());
-        }
-    }
 
     fn setup_file(&mut self) -> io::Result<()> {
         let buffer = vec![0u8]
@@ -107,46 +99,17 @@ impl FileAggregator {
         Ok(())
     }
 
-    fn file_read(&mut self, location: u64) -> io::Result<usize> {
-        self.file
-            .seek(SeekFrom::Start(location * mem::size_of::<u32>() as u64))?;
-
-        let buffer = &self.file_buffer[..];
-        let buffer = unsafe {
-            slice::from_raw_parts_mut(
-                buffer.as_ptr() as *mut u8,
-                buffer.len() * mem::size_of::<u32>(),
-            )
-        };
-        self.file.read(buffer)
-    }
-
-    fn file_write(&mut self, location: u64) -> io::Result<usize> {
-        self.file
-            .seek(SeekFrom::Start(location * mem::size_of::<u32>() as u64))?;
-
-        let buffer = &self.file_buffer[..];
-        let buffer = unsafe {
-            slice::from_raw_parts(
-                buffer.as_ptr() as *const u8,
-                buffer.len() * mem::size_of::<u32>(),
-            )
-        };
-        self.file.write(buffer)
-    }
-
     fn write_pixel_buffer(&mut self, buffer: usize) -> io::Result<()> {
-        let file_buffer_size = self.file_buffer_size;
-        self.file_read(buffer as u64 * file_buffer_size as u64)?;
+        file::read_u32(&mut self.file, buffer as u64 * self.file_buffer_size as u64, &mut self.file_buffer)?;
 
         for (x, y) in self.pixel_buffers[buffer].iter() {
             let location = y * self.file_width + x;
-            let location = (location as usize) % file_buffer_size;
+            let location = (location as usize) % self.file_buffer_size;
 
             self.file_buffer[location as usize] += 1;
         }
 
-        self.file_write(buffer as u64 * file_buffer_size as u64)?;
+        file::write_u32(&mut self.file, buffer as u64 * self.file_buffer_size as u64, &mut self.file_buffer)?;
 
         Ok(())
     }
