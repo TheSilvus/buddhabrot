@@ -2,7 +2,7 @@ extern crate image;
 extern crate num;
 extern crate rand;
 
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::sync::mpsc;
 use std::thread;
 
@@ -25,21 +25,23 @@ fn main() {
     // Calculating - Algorithms
     let scan_min = Complex64::new(-2.0, -2.0);
     let scan_max = Complex64::new(2.0, 2.0);
-    let iterations = 100;
-    let samples = 1e7 as usize;
-    let sample_section = 1e5 as usize;
+    let iterations = 1000;
+    let samples = 1e8 as usize;
+    let sample_section = 5e5 as usize;
 
     // Threading
     let threads = 4;
-    let channel_buffer = 4;
+    let channel_buffer = 100;
+
+    let thread_buffer = 10_000;
 
     // Aggregation
-    let file_buffer_size = 1e7 as usize;
-    let pixel_buffer_cutoff_size = 1e5 as usize;
+    let file_buffer_size = 1e6 as usize;
+    let pixel_buffer_cutoff_size = 1e6 as usize;
 
     // MBH output
-    let mbh_width = 500;
-    let mbh_height = 500;
+    let mbh_width = 1000;
+    let mbh_height = 1000;
     let mbh_min = Complex64::new(-2.0, -2.0);
     let mbh_max = Complex64::new(2.0, 2.0);
 
@@ -64,8 +66,8 @@ fn main() {
 
             thread::spawn(move || {
                 println!("Starting thread {}", thread_id);
-                
-                let mut result_cache = Vec::new();
+
+                let mut result_cache = Vec::with_capacity(thread_buffer);
                 while let Some(c) = location_generator.next_location() {
                     let result = math::calculate_iteration_values(
                         &function(c),
@@ -84,11 +86,17 @@ fn main() {
                         result_cache.extend(result);
                     }
 
-                    if result_cache.len() > 10_000 {
-                        sender
-                            .send(Some(result_cache))
-                            .expect("Sender closed too early");
-                        result_cache = Vec::new();
+                    if result_cache.len() > thread_buffer {
+                        match sender.try_send(Some(result_cache)) {
+                            Ok(_) => {}
+                            Err(mpsc::TrySendError::Full(result_cache)) => {
+                                println!("Bottleneck while sending");
+                                sender.send(result_cache).expect("Sender closed too early");
+                            }
+                            _ => panic!(),
+                        }
+
+                        result_cache = Vec::with_capacity(thread_buffer);
                     }
                 }
                 sender.send(None).expect("Sender closed too early");

@@ -1,9 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::io::{Read, Seek, SeekFrom, Write};
 use std::mem;
-use std::slice;
-
+use std::io::Write;
 use num::complex::Complex64;
 
 use math;
