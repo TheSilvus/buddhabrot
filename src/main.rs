@@ -13,6 +13,7 @@ pub mod file;
 pub mod location_generators;
 pub mod math;
 pub mod vec;
+pub mod eta;
 use location_generators::LocationGenerator;
 
 fn main() {
@@ -29,6 +30,10 @@ fn main() {
     let iterations: usize = 5000;
     let samples: usize = 1e8 as usize;
     let sample_section: usize = 5e5 as usize;
+
+    // ETA
+    let eta_section: usize = 100000;
+    let eta_time: u64 = 1000;
 
     // Threading
     let threads: usize = 4;
@@ -58,6 +63,13 @@ fn main() {
             + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1) * pixel_buffer_cutoff_size)
             / 1000000
     );
+    println!(
+        "Estimated typical maximum RAM usage: {}mb",
+        (threads * thread_buffer * 2 * 8
+            + (channel_buffer / 2) * thread_buffer * 2 * 8
+            + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1) * pixel_buffer_cutoff_size)
+            / 1000000
+    );
 
     {
         let location_generator = location_generators::UniformRandomLocationGenerator::new(
@@ -66,11 +78,13 @@ fn main() {
             samples,
             sample_section,
         );
+        let eta = eta::ETA::new(samples, eta_section, eta_time);
 
         let (sender, receiver) = mpsc::sync_channel::<Option<Vec<Complex64>>>(channel_buffer);
 
         for thread_id in 0..threads {
             let mut location_generator = location_generator.clone();
+            let mut eta = eta.clone();
             let sender = sender.clone();
 
             thread::Builder::new()
@@ -80,6 +94,8 @@ fn main() {
 
                     let mut result_cache = Vec::with_capacity(thread_buffer);
                     while let Some(c) = location_generator.next_location() {
+                        eta.count();
+
                         math::calculate_iteration_values(
                             &function(c),
                             initial_z,
