@@ -18,6 +18,7 @@ use location_generators::LocationGenerator;
 fn main() {
     // Calculating - Mathematics
     let function = |c: Complex64| move |z: Complex64| z * z + c;
+    let initial_z = Complex64::new(0.0, 0.0);
 
     let bailout_min = Complex64::new(-2.0, -2.0);
     let bailout_max = Complex64::new(2.0, 2.0);
@@ -25,23 +26,23 @@ fn main() {
     // Calculating - Algorithms
     let scan_min = Complex64::new(-2.0, -2.0);
     let scan_max = Complex64::new(2.0, 2.0);
-    let iterations = 1000;
+    let iterations = 5000;
     let samples = 1e8 as usize;
     let sample_section = 5e5 as usize;
 
     // Threading
     let threads = 4;
-    let channel_buffer = 100;
+    let channel_buffer = 500;
 
-    let thread_buffer = 10_000;
+    let thread_buffer = 100_000;
 
     // Aggregation
     let file_buffer_size = 1e6 as usize;
     let pixel_buffer_cutoff_size = 1e6 as usize;
 
     // MBH output
-    let mbh_width = 1000;
-    let mbh_height = 1000;
+    let mbh_width = 500;
+    let mbh_height = 500;
     let mbh_min = Complex64::new(-2.0, -2.0);
     let mbh_max = Complex64::new(2.0, 2.0);
 
@@ -64,27 +65,31 @@ fn main() {
             let mut location_generator = location_generator.clone();
             let sender = sender.clone();
 
-            thread::spawn(move || {
+            thread::Builder::new().name(format!("Calculator {}", thread_id)).spawn(move || {
                 println!("Starting thread {}", thread_id);
+                
+                let mut counter = 0;
 
                 let mut result_cache = Vec::with_capacity(thread_buffer);
                 while let Some(c) = location_generator.next_location() {
-                    let result = math::calculate_iteration_values(
+                    counter += 1;
+                    math::calculate_iteration_values(
                         &function(c),
-                        Complex64::new(0.0, 0.0),
+                        initial_z,
                         bailout_min,
                         bailout_max,
                         iterations,
+                        &mut result_cache,
                     );
 
-                    if result.len() > 0
-                        && !math::complex_between(
-                            bailout_min,
-                            result[result.len() - 1],
-                            bailout_max,
-                        ) {
-                        result_cache.extend(result);
-                    }
+                    // if result.len() > 0
+                    //     && !math::complex_between(
+                    //         bailout_min,
+                    //         result[result.len() - 1],
+                    //         bailout_max,
+                    //     ) {
+                    //     result_cache.extend(result);
+                    // }
 
                     if result_cache.len() > thread_buffer {
                         match sender.try_send(Some(result_cache)) {
@@ -101,8 +106,9 @@ fn main() {
                 }
                 sender.send(None).expect("Sender closed too early");
 
+                println!("COUNTER {}", counter);
                 println!("Thread {} done", thread_id);
-            });
+            }).expect("Unable to start thread");
         }
 
         let mut aggregator = aggregators::FileAggregator::create(

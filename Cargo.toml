@@ -7,3 +7,10 @@ authors = ["silvus"]
 num = "*"
 rand = "*"
 image = "*"
+
+[dev-dependencies]
+criterion = "0.2"
+
+[[bench]]
+name = "math"
+harness = false

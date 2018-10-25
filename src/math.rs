@@ -9,22 +9,30 @@ pub fn calculate_iteration_values(
     initial: Complex64,
     bailout_min: Complex64,
     bailout_max: Complex64,
-    max_iterations: u64,
-) -> Vec<Complex64> {
+    max_iterations: usize,
+    results: &mut Vec<Complex64>,
+) {
     let mut z = initial;
     let mut iterations = 0;
 
-    // TODO evaluate: is iterating without saving results at the same time more performant?
+    // Note: Combining both loops heavily decrases performance (~ +50%). 
 
-    let mut results = Vec::with_capacity(max_iterations as usize);
+    while complex_between(bailout_min, z, bailout_max) && iterations < max_iterations {
+        z = function(z);
+        iterations += 1;
+    }
+    if iterations == max_iterations {
+        return;
+    }
+
+    z = initial;
+    iterations = 0;
 
     while complex_between(bailout_min, z, bailout_max) && iterations < max_iterations {
         z = function(z);
         results.push(z);
         iterations += 1;
     }
-
-    results
 }
 
 pub fn complex_to_image(
