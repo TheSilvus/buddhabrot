@@ -24,3 +24,16 @@ pub fn calculate_iteration_values(
 
     results
 }
+
+pub fn complex_to_image(
+    c: Complex64,
+    min: Complex64,
+    max: Complex64,
+    width: u64,
+    height: u64,
+) -> (u64, u64) {
+    (
+        (c.re / (max.re - min.re) * width as f64) as u64,
+        (c.im / (max.im - min.im) * height as f64) as u64,
+    )
+}

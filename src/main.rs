@@ -6,31 +6,52 @@ use std::thread;
 use num::complex::Complex64;
 use std::sync::mpsc;
 
+pub mod aggregators;
 pub mod location_generators;
 pub mod math;
 use location_generators::LocationGenerator;
 
-const THREADS: usize = 4;
-const CHANNEL_BUFFER: usize = 4;
-
 fn main() {
-    let iterations = 5;
+    // Calculating - Mathematics
     let function = |c: Complex64| move |z: Complex64| z * z + c;
 
     let bailout_min = Complex64::new(-2.0, -2.0);
     let bailout_max = Complex64::new(2.0, 2.0);
 
+    // Calculating - Algorithms
+    let scan_min = Complex64::new(-2.0, -2.0);
+    let scan_max = Complex64::new(2.0, 2.0);
+    let iterations = 5;
+    let samples = 1e8 as usize;
+    let sample_section = 1e5 as usize;
+
+    // Threading
+    let threads = 4;
+    let channel_buffer = 4;
+
+    // Aggregation
+    let file_buffer_size = 1e7 as usize;
+    let pixel_buffer_cutoff_size = 1e5 as usize;
+
+    // MBH output
+    let mbh_width = 3000;
+    let mbh_height = 3000;
+    let mbh_min = Complex64::new(-2.0, -2.0);
+    let mbh_max = Complex64::new(2.0, 2.0);
+
+    let file_name = "image.mbh";
+
     {
         let location_generator = location_generators::UniformRandomLocationGenerator::new(
-            Complex64::new(-2.0, -2.0),
-            Complex64::new(2.0, 2.0),
-            50,
-            10,
+            scan_min,
+            scan_max,
+            samples,
+            sample_section,
         );
 
-        let (sender, receiver) = mpsc::sync_channel::<Option<Vec<Complex64>>>(CHANNEL_BUFFER);
+        let (sender, receiver) = mpsc::sync_channel::<Option<Vec<Complex64>>>(channel_buffer);
 
-        for thread_id in 0..THREADS {
+        for thread_id in 0..threads {
             let mut location_generator = location_generator.clone();
             let sender = sender.clone();
 
@@ -45,7 +66,12 @@ fn main() {
                         iterations,
                     );
 
-                    if result.len() > 0 && !math::complex_between(bailout_min, result[result.len() - 1], bailout_max) {
+                    if result.len() > 0
+                        && !math::complex_between(
+                            bailout_min,
+                            result[result.len() - 1],
+                            bailout_max,
+                        ) {
                         sender.send(Some(result)).expect("Sender closed too early");
                     }
                 }
@@ -55,16 +81,26 @@ fn main() {
             });
         }
 
+        let mut aggregator = aggregators::FileAggregator::create(
+            file_name,
+            mbh_width,
+            mbh_height,
+            mbh_min,
+            mbh_max,
+            file_buffer_size,
+            pixel_buffer_cutoff_size,
+        ).expect("Error while setting up aggregator");
+
         let mut received = 0;
-        while received < THREADS {
+        while received < threads {
             let result = receiver.recv().unwrap();
             if let Some(result) = result {
-                println!("{:?}", result);
+                for c in result {
+                    aggregator.aggregate(c);
+                }
             } else {
                 received += 1;
             }
         }
-
-        thread::sleep_ms(10);
     }
 }

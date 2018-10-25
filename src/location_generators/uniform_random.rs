@@ -17,6 +17,7 @@ pub struct UniformRandomLocationGenerator {
 }
 
 impl UniformRandomLocationGenerator {
+    // Values required to be usize because only AtomicUsize is implemented in std
     pub fn new(
         min: Complex64,
         max: Complex64,
