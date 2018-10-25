@@ -43,9 +43,9 @@ impl FileAggregator {
             file_buffer_size,
             pixel_buffer_cutoff_size,
 
-            file_buffer: vec::filled_with(&0, file_buffer_size),
+            file_buffer: vec::filled_with(0, file_buffer_size),
 
-            pixel_buffers: vec::filled_with(&Vec::new(),
+            pixel_buffers: vec::filled_with(Vec::new(),
                 (file_width * file_height / file_buffer_size as u64) as usize + 1,
             ),
         };

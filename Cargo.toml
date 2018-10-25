@@ -6,3 +6,4 @@ authors = ["silvus"]
 [dependencies]
 num = "*"
 rand = "*"
+image = "*"

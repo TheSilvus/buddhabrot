@@ -33,7 +33,7 @@ pub fn complex_to_image(
     height: u64,
 ) -> (u64, u64) {
     (
-        (c.re / (max.re - min.re) * width as f64) as u64,
-        (c.im / (max.im - min.im) * height as f64) as u64,
+        ((c.re - min.re) / (max.re - min.re) * width as f64) as u64,
+        ((c.im - min.im) / (max.im - min.im) * height as f64) as u64,
     )
 }
