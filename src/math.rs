@@ -21,7 +21,7 @@ pub fn calculate_iteration_values(
         z = function(z);
         iterations += 1;
     }
-    if iterations == max_iterations {
+    if complex_between(bailout_min, z, bailout_max) {
         return;
     }
 

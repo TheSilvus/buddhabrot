@@ -26,23 +26,23 @@ fn main() {
     // Calculating - Algorithms
     let scan_min = Complex64::new(-2.0, -2.0);
     let scan_max = Complex64::new(2.0, 2.0);
-    let iterations = 5000;
-    let samples = 1e8 as usize;
-    let sample_section = 5e5 as usize;
+    let iterations: usize = 5000;
+    let samples: usize = 1e8 as usize;
+    let sample_section: usize = 5e5 as usize;
 
     // Threading
-    let threads = 4;
-    let channel_buffer = 500;
+    let threads: usize = 4;
+    let channel_buffer: usize = 500;
 
-    let thread_buffer = 100_000;
+    let thread_buffer: usize = 100_000;
 
     // Aggregation
-    let file_buffer_size = 1e6 as usize;
-    let pixel_buffer_cutoff_size = 1e6 as usize;
+    let file_buffer_size: usize = 1e6 as usize;
+    let pixel_buffer_cutoff_size: usize = 1e6 as usize;
 
     // MBH output
-    let mbh_width = 500;
-    let mbh_height = 500;
+    let mbh_width: u64 = 5000;
+    let mbh_height: u64 = 5000;
     let mbh_min = Complex64::new(-2.0, -2.0);
     let mbh_max = Complex64::new(2.0, 2.0);
 
@@ -50,6 +50,14 @@ fn main() {
 
     // Image output
     let image_file_name = "image.png";
+
+    println!(
+        "Estimated maximum RAM usage: {}mb",
+        (threads * thread_buffer * 2 * 8
+            + channel_buffer * thread_buffer * 2 * 8
+            + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1) * pixel_buffer_cutoff_size)
+            / 1000000
+    );
 
     {
         let location_generator = location_generators::UniformRandomLocationGenerator::new(
@@ -65,50 +73,39 @@ fn main() {
             let mut location_generator = location_generator.clone();
             let sender = sender.clone();
 
-            thread::Builder::new().name(format!("Calculator {}", thread_id)).spawn(move || {
-                println!("Starting thread {}", thread_id);
-                
-                let mut counter = 0;
+            thread::Builder::new()
+                .name(format!("Calculator {}", thread_id))
+                .spawn(move || {
+                    println!("Starting thread {}", thread_id);
 
-                let mut result_cache = Vec::with_capacity(thread_buffer);
-                while let Some(c) = location_generator.next_location() {
-                    counter += 1;
-                    math::calculate_iteration_values(
-                        &function(c),
-                        initial_z,
-                        bailout_min,
-                        bailout_max,
-                        iterations,
-                        &mut result_cache,
-                    );
+                    let mut result_cache = Vec::with_capacity(thread_buffer);
+                    while let Some(c) = location_generator.next_location() {
+                        math::calculate_iteration_values(
+                            &function(c),
+                            initial_z,
+                            bailout_min,
+                            bailout_max,
+                            iterations,
+                            &mut result_cache,
+                        );
 
-                    // if result.len() > 0
-                    //     && !math::complex_between(
-                    //         bailout_min,
-                    //         result[result.len() - 1],
-                    //         bailout_max,
-                    //     ) {
-                    //     result_cache.extend(result);
-                    // }
-
-                    if result_cache.len() > thread_buffer {
-                        match sender.try_send(Some(result_cache)) {
-                            Ok(_) => {}
-                            Err(mpsc::TrySendError::Full(result_cache)) => {
-                                println!("Bottleneck while sending");
-                                sender.send(result_cache).expect("Sender closed too early");
+                        if result_cache.len() > thread_buffer {
+                            match sender.try_send(Some(result_cache)) {
+                                Ok(_) => {}
+                                Err(mpsc::TrySendError::Full(result_cache)) => {
+                                    println!("Bottleneck while sending");
+                                    sender.send(result_cache).expect("Sender closed too early");
+                                }
+                                _ => panic!(),
                             }
-                            _ => panic!(),
+
+                            result_cache = Vec::with_capacity(thread_buffer);
                         }
-
-                        result_cache = Vec::with_capacity(thread_buffer);
                     }
-                }
-                sender.send(None).expect("Sender closed too early");
+                    sender.send(None).expect("Sender closed too early");
 
-                println!("COUNTER {}", counter);
-                println!("Thread {} done", thread_id);
-            }).expect("Unable to start thread");
+                    println!("Thread {} done", thread_id);
+                }).expect("Unable to start thread");
         }
 
         let mut aggregator = aggregators::FileAggregator::create(

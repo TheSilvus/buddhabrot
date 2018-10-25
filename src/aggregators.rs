@@ -139,7 +139,6 @@ impl Drop for FileAggregator {
     fn drop(&mut self) {
         for i in 0..self.pixel_buffers.len() {
             if self.pixel_buffers[i].len() > 0 {
-                // TODO fight borrow checker
                 self.write_pixel_buffer(i).expect("Error while writing pixel buffer");
             }
         }
