@@ -4,6 +4,7 @@ use num::complex::Complex64;
 use rand;
 use rand::{Rng, SeedableRng};
 
+// TODO taking a task should already increase total to prevent other thread from trying
 pub struct UniformRandomLocationGenerator {
     min: Complex64,
     max: Complex64,
@@ -15,7 +16,6 @@ pub struct UniformRandomLocationGenerator {
 
     rng: rand::prng::XorShiftRng,
 }
-
 impl UniformRandomLocationGenerator {
     // Values required to be usize because only AtomicUsize is implemented in std
     pub fn new(
@@ -40,24 +40,25 @@ impl UniformRandomLocationGenerator {
 
 impl ::location_generators::LocationGenerator<Complex64> for UniformRandomLocationGenerator {
     fn next_location(&mut self) -> Option<Complex64> {
-        self.section_current += 1;
-        if self.section_current >= self.section_total {
-            let current = self.current.load(Ordering::Relaxed) + self.section_total;
-
-            println!(
-                "Finished section {}/{}",
-                current / self.section_total,
-                self.total / self.section_total
-            );
+        if self.section_current == 0 {
+            let current = self.current.load(Ordering::Relaxed);
 
             if current >= self.total {
                 return None;
             }
 
+            println!(
+                "Starting section {}/{}",
+                current / self.section_total + 1,
+                self.total / self.section_total
+            );
+
             self.current
-                .fetch_add(self.section_current, Ordering::Relaxed);
-            self.section_current = 0;
+                .fetch_add(self.section_total, Ordering::Relaxed);
+            self.section_current = self.section_total;
         }
+
+        self.section_current -= 1;
 
         Some(Complex64::new(
             self.rng.gen_range(self.min.re, self.max.re),
