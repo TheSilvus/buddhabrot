@@ -28,17 +28,17 @@ fn main() {
     // Calculating - Algorithms
     let scan_min = Complex64::new(-2.0, -2.0);
     let scan_max = Complex64::new(2.0, 2.0);
-    let iterations: usize = 5000;
-    let samples: usize = 1e8 as usize;
+    let iterations: usize = 500_000;
+    let samples: usize = 5e8 as usize;
     let sample_section: usize = 1e7 as usize;
 
     // ETA
-    let eta_section: usize = 1000;
+    let eta_section: usize = 1;
     let eta_time: u64 = 1000;
 
     // Threading
     let threads: usize = 4;
-    let channel_buffer: usize = 500;
+    let channel_buffer: usize = 50;
 
     let thread_buffer: usize = 1_000_000;
 
@@ -47,8 +47,8 @@ fn main() {
     let pixel_buffer_cutoff_size: usize = 1e6 as usize;
 
     // MBH output
-    let mbh_width: u64 = 5_000;
-    let mbh_height: u64 = 5_000;
+    let mbh_width: u64 = 10000;
+    let mbh_height: u64 = 10000;
     let mbh_min = Complex64::new(-2.0, -2.0);
     let mbh_max = Complex64::new(2.0, 2.0);
 
@@ -59,8 +59,7 @@ fn main() {
 
     println!(
         "Estimated maximum RAM usage: {}mb",
-        (threads * thread_buffer * 2 * 8
-            + channel_buffer * thread_buffer * 2 * 8
+        ((threads + channel_buffer) * thread_buffer * 2 * 8
             + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1)
                 * pixel_buffer_cutoff_size)
             / 1000000
@@ -125,6 +124,7 @@ fn main() {
                             result_cache = Vec::with_capacity(thread_buffer);
                         }
                     }
+                    sender.send(Some(result_cache)).expect("Sender closed too early");
                     sender.send(None).expect("Sender closed too early");
 
                     println!("Thread {} done", thread_id);
@@ -167,7 +167,7 @@ fn main() {
 
         println!("Saving image");
         image
-            .map_linear_height()
+            .map_sqrt_height()
             .save(image_file_name)
             .unwrap();
     }

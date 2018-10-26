@@ -93,6 +93,12 @@ impl ImageData {
         self.map_color1(&|i| ((i as f64 / highest as f64) * 255.0) as u8)
     }
 
+    pub fn map_sqrt_height(&self) -> Image {
+        let highest = (*self.data.iter().max().unwrap() as f64).sqrt();
+
+        self.map_color1(&|i| (((i as f64).sqrt() / highest as f64) * 255.0) as u8)
+    }
+
     pub fn map_linear_count(&self, minimum_height: u32) -> Image {
         let heights = self.count_heights();
         let sum: u64 = heights.values().skip(minimum_height as usize).sum();

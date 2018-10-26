@@ -1,12 +1,12 @@
+use num::complex::Complex64;
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::mem;
 use std::io::Write;
-use num::complex::Complex64;
+use std::mem;
 
+use file;
 use math;
 use vec;
-use file;
 
 pub struct FileAggregator {
     file: File,
@@ -43,7 +43,8 @@ impl FileAggregator {
 
             file_buffer: vec::filled_with(0, file_buffer_size),
 
-            pixel_buffers: vec::filled_with(Vec::new(),
+            pixel_buffers: vec::filled_with(
+                Vec::new(),
                 (file_width * file_height / file_buffer_size as u64) as usize + 1,
             ),
         };
@@ -81,7 +82,6 @@ impl FileAggregator {
         )
     }
 
-
     fn setup_file(&mut self) -> io::Result<()> {
         let buffer = vec![0u8]
             .iter()
@@ -98,7 +98,11 @@ impl FileAggregator {
     }
 
     fn write_pixel_buffer(&mut self, buffer: usize) -> io::Result<()> {
-        file::read_u32(&mut self.file, buffer as u64 * self.file_buffer_size as u64, &mut self.file_buffer)?;
+        file::read_u32(
+            &mut self.file,
+            buffer as u64 * self.file_buffer_size as u64,
+            &mut self.file_buffer,
+        )?;
 
         for (x, y) in self.pixel_buffers[buffer].iter() {
             let location = y * self.file_width + x;
@@ -107,8 +111,11 @@ impl FileAggregator {
             self.file_buffer[location as usize] += 1;
         }
 
-        file::write_u32(&mut self.file, buffer as u64 * self.file_buffer_size as u64, &mut self.file_buffer)?;
-
+        file::write_u32(
+            &mut self.file,
+            buffer as u64 * self.file_buffer_size as u64,
+            &mut self.file_buffer,
+        )?;
         Ok(())
     }
 
@@ -121,6 +128,7 @@ impl FileAggregator {
                 self.file_width,
                 self.file_height,
             );
+
             if x < self.file_width && y < self.file_height {
                 let location = (y * self.file_width + x) as usize;
                 let buffer = location / self.file_buffer_size;
@@ -139,7 +147,8 @@ impl Drop for FileAggregator {
     fn drop(&mut self) {
         for i in 0..self.pixel_buffers.len() {
             if self.pixel_buffers[i].len() > 0 {
-                self.write_pixel_buffer(i).expect("Error while writing pixel buffer");
+                self.write_pixel_buffer(i)
+                    .expect("Error while writing pixel buffer");
             }
         }
     }
