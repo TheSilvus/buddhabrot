@@ -15,11 +15,16 @@ pub fn calculate_iteration_values(
     let mut z = initial;
     let mut iterations = 0;
 
-    // Note: Combining both loops heavily decrases performance (~ +50%). 
+    // Note: Combining both loops heavily decrases performance (~ +50%).
 
     while complex_between(bailout_min, z, bailout_max) && iterations < max_iterations {
-        z = function(z);
-        iterations += 1;
+        let new_z = function(z);
+        if new_z == z {
+            break;
+        } else {
+            z = new_z;
+            iterations += 1;
+        }
     }
     if complex_between(bailout_min, z, bailout_max) {
         return;
@@ -29,9 +34,17 @@ pub fn calculate_iteration_values(
     iterations = 0;
 
     while complex_between(bailout_min, z, bailout_max) && iterations < max_iterations {
-        z = function(z);
-        results.push(z);
-        iterations += 1;
+        let new_z = function(z);
+        if new_z == z {
+            for _ in iterations..max_iterations {
+                results.push(z);
+            }
+            break;
+        } else {
+            z = new_z;
+            results.push(z);
+            iterations += 1;
+        }
     }
 }
 
@@ -46,4 +59,14 @@ pub fn complex_to_image(
         ((c.re - min.re) / (max.re - min.re) * width as f64) as u64,
         ((c.im - min.im) / (max.im - min.im) * height as f64) as u64,
     )
+}
+
+
+pub fn is_inside_mandelbrot_bulb(c: Complex64) -> bool{
+    let x = c.re;
+    let y = c.im;
+
+    let p = (x - 1.0 / 4.0) * (x - 1.0 / 4.0) + y * y;
+
+    x < p - 2.0 * p * p + 1.0 / 4.0 && (x + 1.0) * (x + 1.0) + y * y < 1.0 / 16.0
 }
