@@ -1,7 +1,8 @@
-extern crate image;
+extern crate image as file_image;
 extern crate num;
 extern crate rand;
 
+use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::sync::mpsc;
 use std::thread;
@@ -9,11 +10,12 @@ use std::thread;
 use num::complex::Complex64;
 
 pub mod aggregators;
+pub mod eta;
 pub mod file;
+pub mod image;
 pub mod location_generators;
 pub mod math;
 pub mod vec;
-pub mod eta;
 use location_generators::LocationGenerator;
 
 fn main() {
@@ -29,25 +31,25 @@ fn main() {
     let scan_max = Complex64::new(2.0, 2.0);
     let iterations: usize = 5000;
     let samples: usize = 1e8 as usize;
-    let sample_section: usize = 5e5 as usize;
+    let sample_section: usize = 1e7 as usize;
 
     // ETA
-    let eta_section: usize = 100000;
+    let eta_section: usize = 1000;
     let eta_time: u64 = 1000;
 
     // Threading
     let threads: usize = 4;
     let channel_buffer: usize = 500;
 
-    let thread_buffer: usize = 100_000;
+    let thread_buffer: usize = 1_000_000;
 
     // Aggregation
     let file_buffer_size: usize = 1e6 as usize;
     let pixel_buffer_cutoff_size: usize = 1e6 as usize;
 
     // MBH output
-    let mbh_width: u64 = 5000;
-    let mbh_height: u64 = 5000;
+    let mbh_width: u64 = 25000;
+    let mbh_height: u64 = 25000;
     let mbh_min = Complex64::new(-2.0, -2.0);
     let mbh_max = Complex64::new(2.0, 2.0);
 
@@ -60,18 +62,20 @@ fn main() {
         "Estimated maximum RAM usage: {}mb",
         (threads * thread_buffer * 2 * 8
             + channel_buffer * thread_buffer * 2 * 8
-            + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1) * pixel_buffer_cutoff_size)
+            + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1)
+                * pixel_buffer_cutoff_size)
             / 1000000
     );
     println!(
         "Estimated typical maximum RAM usage: {}mb",
         (threads * thread_buffer * 2 * 8
             + (channel_buffer / 2) * thread_buffer * 2 * 8
-            + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1) * pixel_buffer_cutoff_size)
+            + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1)
+                * pixel_buffer_cutoff_size)
             / 1000000
     );
 
-    {
+    if false {
         let location_generator = location_generators::UniformRandomLocationGenerator::new(
             scan_min,
             scan_max,
@@ -95,6 +99,10 @@ fn main() {
                     let mut result_cache = Vec::with_capacity(thread_buffer);
                     while let Some(c) = location_generator.next_location() {
                         eta.count();
+
+                        if math::is_inside_mandelbrot_bulb(c) {
+                            continue;
+                        }
 
                         math::calculate_iteration_values(
                             &function(c),
@@ -156,27 +164,34 @@ fn main() {
             .expect("Could not open file");
 
         // TODO tiled writing?
-        let mut image = vec::filled_with(0, mbh_width as usize * mbh_height as usize);
-        file::read_u32(&mut file, 0, &mut image).unwrap();
 
-        let mut highest_value = 0;
-        for height in &image {
-            if *height > highest_value {
-                highest_value = *height;
-            }
-        }
+        println!("Reading image into memory");
+        let image =
+            image::ImageData::read_fully(&mut file, mbh_width as usize, mbh_height as usize)
+                .expect("Error while reading file");
 
-        let converted = image
+        println!("Calculating values");
+        let heights = image.count_heights();
+        let sum: u64 = heights.values().skip(5).sum();
+
+        println!("Preparing color map");
+        let mut current_sum = 0;
+
+        let height_colors = heights
             .iter()
-            .map(|i| ((*i as f64 / highest_value as f64) * 256 as f64) as u8)
-            .collect::<Vec<_>>();
+            .map(|(height, count)| (*height, *count))
+            .map(|(height, count)| {
+                if height < 5 {
+                    (height, 0)
+                } else {
+                    current_sum += count;
+                    (height, (current_sum / (sum / 255)) as u8)
+                }
+            }).collect::<BTreeMap<_, _>>();
 
-        image::save_buffer(
-            image_file_name,
-            &converted[..],
-            mbh_width as u32,
-            mbh_height as u32,
-            image::Gray(8),
-        ).unwrap();
+        println!("Saving image");
+        image
+            .map_and_save(image_file_name, &|i| *height_colors.get(&i).unwrap())
+            .unwrap();
     }
 }
