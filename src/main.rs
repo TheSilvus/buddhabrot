@@ -2,7 +2,6 @@ extern crate image as file_image;
 extern crate num;
 extern crate rand;
 
-use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::sync::mpsc;
 use std::thread;
@@ -48,8 +47,8 @@ fn main() {
     let pixel_buffer_cutoff_size: usize = 1e6 as usize;
 
     // MBH output
-    let mbh_width: u64 = 25000;
-    let mbh_height: u64 = 25000;
+    let mbh_width: u64 = 5_000;
+    let mbh_height: u64 = 5_000;
     let mbh_min = Complex64::new(-2.0, -2.0);
     let mbh_max = Complex64::new(2.0, 2.0);
 
@@ -71,11 +70,11 @@ fn main() {
         (threads * thread_buffer * 2 * 8
             + (channel_buffer / 2) * thread_buffer * 2 * 8
             + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1)
-                * pixel_buffer_cutoff_size)
+                * (pixel_buffer_cutoff_size / 2))
             / 1000000
     );
 
-    if false {
+    {
         let location_generator = location_generators::UniformRandomLocationGenerator::new(
             scan_min,
             scan_max,
@@ -156,42 +155,20 @@ fn main() {
     }
 
     {
-        // TODO extract into reusable functions
         // TODO separate image size; downsampling
         let mut file = OpenOptions::new()
             .read(true)
             .open(mbh_file_name)
             .expect("Could not open file");
+        
+        let image = image::ImageData::read_fully(&mut file, mbh_width as usize, mbh_height as usize).expect("Could not read file");
 
         // TODO tiled writing?
 
-        println!("Reading image into memory");
-        let image =
-            image::ImageData::read_fully(&mut file, mbh_width as usize, mbh_height as usize)
-                .expect("Error while reading file");
-
-        println!("Calculating values");
-        let heights = image.count_heights();
-        let sum: u64 = heights.values().skip(5).sum();
-
-        println!("Preparing color map");
-        let mut current_sum = 0;
-
-        let height_colors = heights
-            .iter()
-            .map(|(height, count)| (*height, *count))
-            .map(|(height, count)| {
-                if height < 5 {
-                    (height, 0)
-                } else {
-                    current_sum += count;
-                    (height, (current_sum / (sum / 255)) as u8)
-                }
-            }).collect::<BTreeMap<_, _>>();
-
         println!("Saving image");
         image
-            .map_and_save(image_file_name, &|i| *height_colors.get(&i).unwrap())
+            .map_linear_height()
+            .save(image_file_name)
             .unwrap();
     }
 }
