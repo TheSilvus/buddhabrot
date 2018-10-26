@@ -67,20 +67,21 @@ impl ETAStore {
 
         let estimated_left = (duration * (self.total as f64 / current as f64) - duration) as u64;
         println!(
-            "ETA: {}h{:02}m{:02}s; {} / {}; {:.5}%",
+            "ETA: {}h{:02}m{:02}s; {} / {}; {:.5}%; {:.2} samples/s",
             estimated_left / (60 * 60),
             (estimated_left / 60) % 60,
             estimated_left % 60,
             current,
             self.total,
-            (current as f64 / self.total as f64) * 100.0
+            (current as f64 / self.total as f64) * 100.0,
+            current as f64 / duration
         );
     }
 
     fn run_thread(store: Arc<ETAStore>) {
         thread::Builder::new()
             .name("ETA".to_string())
-            .spawn(move || loop {
+            .spawn(move || while Arc::strong_count(&store) > 1 {
                 thread::sleep(Duration::from_millis(store.timeout));
 
                 store.print();
