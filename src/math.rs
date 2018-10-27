@@ -4,6 +4,34 @@ pub fn complex_between(a: Complex64, z: Complex64, b: Complex64) -> bool {
     a.re < z.re && z.re < b.re && a.im < z.im && z.im < b.im
 }
 
+// Note: Combining both calculate_* methods heavily decreases performance
+pub fn calculate_bailout_iteration(
+    function: &Fn(Complex64) -> Complex64,
+    initial: Complex64,
+    bailout_min: Complex64,
+    bailout_max: Complex64,
+    max_iterations: usize,
+) -> Option<usize> {
+    let mut z = initial;
+    let mut iterations = 0;
+
+    while complex_between(bailout_min, z, bailout_max) && iterations < max_iterations {
+        let new_z = function(z);
+        if new_z == z {
+            iterations = max_iterations;
+            break;
+        } else {
+            z = new_z;
+            iterations += 1;
+        }
+    }
+    if complex_between(bailout_min, z, bailout_max) {
+        None
+    } else {
+        Some(iterations)
+    }
+}
+
 pub fn calculate_iteration_values(
     function: &Fn(Complex64) -> Complex64,
     initial: Complex64,
@@ -14,24 +42,6 @@ pub fn calculate_iteration_values(
 ) {
     let mut z = initial;
     let mut iterations = 0;
-
-    // Note: Combining both loops heavily decrases performance (~ +50%).
-
-    while complex_between(bailout_min, z, bailout_max) && iterations < max_iterations {
-        let new_z = function(z);
-        if new_z == z {
-            break;
-        } else {
-            z = new_z;
-            iterations += 1;
-        }
-    }
-    if complex_between(bailout_min, z, bailout_max) {
-        return;
-    }
-
-    z = initial;
-    iterations = 0;
 
     while complex_between(bailout_min, z, bailout_max) && iterations < max_iterations {
         let new_z = function(z);
