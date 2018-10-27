@@ -4,9 +4,14 @@ pub fn complex_between(a: Complex64, z: Complex64, b: Complex64) -> bool {
     a.re < z.re && z.re < b.re && a.im < z.im && z.im < b.im
 }
 
+
+pub trait CalculateNext {
+    fn next(&mut self, z: Complex64) -> Complex64;
+}
+
 // Note: Combining both calculate_* methods heavily decreases performance
-pub fn calculate_bailout_iteration(
-    function: &Fn(Complex64) -> Complex64,
+pub fn calculate_bailout_iteration<CN: CalculateNext>(
+    next: &mut CN,
     initial: Complex64,
     bailout_min: Complex64,
     bailout_max: Complex64,
@@ -16,7 +21,7 @@ pub fn calculate_bailout_iteration(
     let mut iterations = 0;
 
     while complex_between(bailout_min, z, bailout_max) && iterations < max_iterations {
-        let new_z = function(z);
+        let new_z = next.next(z);
         if new_z == z {
             iterations = max_iterations;
             break;
@@ -32,8 +37,8 @@ pub fn calculate_bailout_iteration(
     }
 }
 
-pub fn calculate_iteration_values(
-    function: &Fn(Complex64) -> Complex64,
+pub fn calculate_iteration_values<CN: CalculateNext>(
+    next: &mut CN,
     initial: Complex64,
     bailout_min: Complex64,
     bailout_max: Complex64,
@@ -44,7 +49,7 @@ pub fn calculate_iteration_values(
     let mut iterations = 0;
 
     while complex_between(bailout_min, z, bailout_max) && iterations < max_iterations {
-        let new_z = function(z);
+        let new_z = next.next(z);
         if new_z == z {
             for _ in iterations..max_iterations {
                 results.push(z);

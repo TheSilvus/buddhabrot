@@ -17,74 +17,122 @@ pub mod math;
 pub mod vec;
 use location_generators::LocationGenerator;
 
+#[derive(Clone, Copy)]
+struct CalculateNext {
+    c: Complex64,
+}
+impl CalculateNext {
+    fn get(&self, c: Complex64) -> CalculateNext {
+        CalculateNext { c }
+    }
+}
+impl math::CalculateNext for CalculateNext {
+    fn next(&mut self, z: Complex64) -> Complex64 {
+        z * z + self.c
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Config<'a> {
+    function: CalculateNext,
+    initial_z: Complex64,
+
+    bailout_min: Complex64,
+    bailout_max: Complex64,
+
+    scan_min: Complex64,
+    scan_max: Complex64,
+    iterations: usize,
+    samples: usize,
+    sample_section: usize,
+
+    eta_section: usize,
+    eta_time: u64,
+
+    threads: usize,
+    channel_buffer: usize,
+    thread_buffer: usize,
+
+    file_buffer_size: usize,
+    pixel_buffer_cutoff_size: usize,
+
+    mbh_width: u64,
+    mbh_height: u64,
+    mbh_min: Complex64,
+    mbh_max: Complex64,
+    mbh_file_name: &'a str,
+
+    image_file_name: &'a str,
+}
+
+
 fn main() {
-    // Calculating - Mathematics
-    let function = |c: Complex64| move |z: Complex64| z * z + c;
-    let initial_z = Complex64::new(0.0, 0.0);
+    let config = Config {
+        function: CalculateNext {
+            c: Complex64::new(0.0, 0.0),
+        },
+        initial_z: Complex64::new(0.0, 0.0),
 
-    let bailout_min = Complex64::new(-2.0, -2.0);
-    let bailout_max = Complex64::new(2.0, 2.0);
+        bailout_min: Complex64::new(-2.0, -2.0),
+        bailout_max: Complex64::new(2.0, 2.0),
 
-    // Calculating - Algorithms
-    let scan_min = Complex64::new(-2.0, -2.0);
-    let scan_max = Complex64::new(2.0, 2.0);
-    let iterations: usize = 10000;
-    let samples: usize = 1e8 as usize;
-    let sample_section: usize = 1e6 as usize;
+        scan_min: Complex64::new(-2.0, -2.0),
+        scan_max: Complex64::new(2.0, 2.0),
+        iterations: 10_000,
+        samples: 1e8 as usize,
+        sample_section: 1e6 as usize,
 
-    // ETA
-    let eta_section: usize = 1;
-    let eta_time: u64 = 1000;
+        eta_section: 10_000,
+        eta_time: 1000,
 
-    // Threading
-    let threads: usize = 4;
-    let channel_buffer: usize = 50;
+        threads: 4,
+        channel_buffer: 50,
+        thread_buffer: 1_000_000,
 
-    let thread_buffer: usize = 1_000_000;
+        file_buffer_size: 1e6 as usize,
+        pixel_buffer_cutoff_size: 1e6 as usize,
 
-    // Aggregation
-    let file_buffer_size: usize = 1e6 as usize;
-    let pixel_buffer_cutoff_size: usize = 1e6 as usize;
+        mbh_width: 1000,
+        mbh_height: 1000,
+        mbh_min: Complex64::new(-2.0, -2.0),
+        mbh_max: Complex64::new(2.0, 2.0),
+        mbh_file_name: "image.mbh",
 
-    // MBH output
-    let mbh_width: u64 = 1000;
-    let mbh_height: u64 = 1000;
-    let mbh_min = Complex64::new(-2.0, -2.0);
-    let mbh_max = Complex64::new(2.0, 2.0);
-
-    let mbh_file_name = "image.mbh";
-
-    // Image output
-    let image_file_name = "image.png";
-
-    println!(
-        "Estimated maximum RAM usage: {}mb",
-        ((threads + channel_buffer) * thread_buffer * 2 * 8
-            + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1)
-                * pixel_buffer_cutoff_size)
-            / 1000000
-    );
-    println!(
-        "Estimated typical maximum RAM usage: {}mb",
-        (threads * thread_buffer * 2 * 8
-            + (channel_buffer / 2) * thread_buffer * 2 * 8
-            + (mbh_width as usize * mbh_height as usize / file_buffer_size + 1)
-                * (pixel_buffer_cutoff_size / 2))
-            / 1000000
-    );
+        image_file_name: "image.png",
+    };
 
     {
-        let location_generator = location_generators::UniformRandomLocationGenerator::new(
-            scan_min,
-            scan_max,
-            samples,
-            sample_section,
+        println!(
+            "Estimated maximum RAM usage: {}mb",
+            ((config.threads + config.channel_buffer) * config.thread_buffer * 2 * 8
+                + (config.mbh_width as usize * config.mbh_height as usize
+                    / config.file_buffer_size
+                    + 1)
+                    * config.pixel_buffer_cutoff_size)
+                / 1000000
         );
-        let eta = eta::ETA::new(samples, eta_section, eta_time);
+        println!(
+            "Estimated typical maximum RAM usage: {}mb",
+            (config.threads * config.thread_buffer * 2 * 8
+                + (config.channel_buffer / 2) * config.thread_buffer * 2 * 8
+                + (config.mbh_width as usize * config.mbh_height as usize
+                    / config.file_buffer_size
+                    + 1)
+                    * (config.pixel_buffer_cutoff_size / 2))
+                / 1000000
+        );
+        let location_generator = location_generators::UniformRandomLocationGenerator::new(
+            config.scan_min,
+            config.scan_max,
+            config.samples,
+            config.sample_section,
+        );
+        let eta = eta::ETA::new(config.samples, config.eta_section, config.eta_time);
 
-        let (sender, receiver) = mpsc::sync_channel::<Option<Vec<Complex64>>>(channel_buffer);
+        let (sender, receiver) =
+            mpsc::sync_channel::<Option<Vec<Complex64>>>(config.channel_buffer);
 
-        for thread_id in 0..threads {
+        for thread_id in 0..config.threads {
             let mut location_generator = location_generator.clone();
             let mut eta = eta.clone();
             let sender = sender.clone();
@@ -94,7 +142,7 @@ fn main() {
                 .spawn(move || {
                     println!("Starting thread {}", thread_id);
 
-                    let mut result_cache = Vec::with_capacity(thread_buffer);
+                    let mut result_cache = Vec::with_capacity(config.thread_buffer);
                     while let Some(c) = location_generator.next_location() {
                         eta.count();
 
@@ -103,24 +151,24 @@ fn main() {
                         }
 
                         if math::calculate_bailout_iteration(
-                            &function(c),
-                            initial_z,
-                            bailout_min,
-                            bailout_max,
-                            iterations,
+                            &mut config.function.get(c),
+                            config.initial_z,
+                            config.bailout_min,
+                            config.bailout_max,
+                            config.iterations,
                         ).is_some()
                         {
                             math::calculate_iteration_values(
-                                &function(c),
-                                initial_z,
-                                bailout_min,
-                                bailout_max,
-                                iterations,
+                                &mut config.function.get(c),
+                                config.initial_z,
+                                config.bailout_min,
+                                config.bailout_max,
+                                config.iterations,
                                 &mut result_cache,
                             );
                         }
 
-                        if result_cache.len() > thread_buffer {
+                        if result_cache.len() > config.thread_buffer {
                             match sender.try_send(Some(result_cache)) {
                                 Ok(_) => {}
                                 Err(mpsc::TrySendError::Full(result_cache)) => {
@@ -130,7 +178,7 @@ fn main() {
                                 _ => panic!(),
                             }
 
-                            result_cache = Vec::with_capacity(thread_buffer);
+                            result_cache = Vec::with_capacity(config.thread_buffer);
                         }
                     }
                     sender
@@ -142,32 +190,31 @@ fn main() {
                 }).expect("Unable to start thread");
         }
 
-        let aggregator_thread =
-            thread::Builder::new()
-                .name("Aggregator".to_owned())
-                .spawn(move || {
-                    let mut aggregator = aggregators::FileAggregator::create(
-                        mbh_file_name,
-                        mbh_width,
-                        mbh_height,
-                        mbh_min,
-                        mbh_max,
-                        file_buffer_size,
-                        pixel_buffer_cutoff_size,
-                    ).expect("Error while setting up aggregator");
+        let aggregator_thread = thread::Builder::new()
+            .name("Aggregator".to_owned())
+            .spawn(move || {
+                let mut aggregator = aggregators::FileAggregator::create(
+                    config.mbh_file_name,
+                    config.mbh_width,
+                    config.mbh_height,
+                    config.mbh_min,
+                    config.mbh_max,
+                    config.file_buffer_size,
+                    config.pixel_buffer_cutoff_size,
+                ).expect("Error while setting up aggregator");
 
-                    let mut received = 0;
-                    while received < threads {
-                        let result = receiver.recv().unwrap();
-                        if let Some(result) = result {
-                            for c in result {
-                                aggregator.aggregate(c);
-                            }
-                        } else {
-                            received += 1;
+                let mut received = 0;
+                while received < config.threads {
+                    let result = receiver.recv().unwrap();
+                    if let Some(result) = result {
+                        for c in result {
+                            aggregator.aggregate(c);
                         }
+                    } else {
+                        received += 1;
                     }
-                }).expect("Unable to start thread");
+                }
+            }).expect("Unable to start thread");
         aggregator_thread.join().expect("Aggregator crashed");
     }
 
@@ -175,16 +222,21 @@ fn main() {
         // TODO separate image size; downsampling
         let mut file = OpenOptions::new()
             .read(true)
-            .open(mbh_file_name)
+            .open(config.mbh_file_name)
             .expect("Could not open file");
 
-        let image =
-            image::ImageData::read_fully(&mut file, mbh_width as usize, mbh_height as usize)
-                .expect("Could not read file");
+        let image = image::ImageData::read_fully(
+            &mut file,
+            config.mbh_width as usize,
+            config.mbh_height as usize,
+        ).expect("Could not read file");
 
         // TODO tiled writing?
 
         println!("Saving image");
-        image.map_sqrt_height().save(image_file_name).unwrap();
+        image
+            .map_sqrt_height()
+            .save(config.image_file_name)
+            .unwrap();
     }
 }
