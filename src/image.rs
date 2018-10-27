@@ -130,6 +130,23 @@ pub struct Image {
     height: usize,
 }
 impl Image {
+    pub fn join(&self, image1: Image, image2: Image, image3: Image, color_type: file_image::ColorType) -> Image {
+        let mut data = Vec::with_capacity(image1.data.len() * 3);
+
+        for i in 0..image1.data.len() {
+            data.push(image1.data[i]);
+            data.push(image2.data[i]);
+            data.push(image3.data[i]);
+        }
+
+        Image {
+            data,
+            color_type,
+            width: image1.width,
+            height: image1.height,
+        }
+    }
+
     pub fn save(&self, file: &str) -> io::Result<()> {
         file_image::save_buffer(
             file,

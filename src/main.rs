@@ -142,27 +142,33 @@ fn main() {
                 }).expect("Unable to start thread");
         }
 
-        let mut aggregator = aggregators::FileAggregator::create(
-            mbh_file_name,
-            mbh_width,
-            mbh_height,
-            mbh_min,
-            mbh_max,
-            file_buffer_size,
-            pixel_buffer_cutoff_size,
-        ).expect("Error while setting up aggregator");
+        let aggregator_thread =
+            thread::Builder::new()
+                .name("Aggregator".to_owned())
+                .spawn(move || {
+                    let mut aggregator = aggregators::FileAggregator::create(
+                        mbh_file_name,
+                        mbh_width,
+                        mbh_height,
+                        mbh_min,
+                        mbh_max,
+                        file_buffer_size,
+                        pixel_buffer_cutoff_size,
+                    ).expect("Error while setting up aggregator");
 
-        let mut received = 0;
-        while received < threads {
-            let result = receiver.recv().unwrap();
-            if let Some(result) = result {
-                for c in result {
-                    aggregator.aggregate(c);
-                }
-            } else {
-                received += 1;
-            }
-        }
+                    let mut received = 0;
+                    while received < threads {
+                        let result = receiver.recv().unwrap();
+                        if let Some(result) = result {
+                            for c in result {
+                                aggregator.aggregate(c);
+                            }
+                        } else {
+                            received += 1;
+                        }
+                    }
+                }).expect("Unable to start thread");
+        aggregator_thread.join().expect("Aggregator crashed");
     }
 
     {
