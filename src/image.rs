@@ -130,7 +130,7 @@ pub struct Image {
     height: usize,
 }
 impl Image {
-    pub fn join(&self, image1: Image, image2: Image, image3: Image, color_type: file_image::ColorType) -> Image {
+    pub fn join(image1: &Image, image2: &Image, image3: &Image, color_type: file_image::ColorType) -> Image {
         let mut data = Vec::with_capacity(image1.data.len() * 3);
 
         for i in 0..image1.data.len() {
