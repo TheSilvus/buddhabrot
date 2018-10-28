@@ -87,48 +87,133 @@ fn main() {
 
         scan_min: Complex64::new(-2.0, -2.0),
         scan_max: Complex64::new(2.0, 2.0),
-        samples: 1e8 as usize,
+        samples: 2.5e10 as usize,
         sample_section: 1e6 as usize,
 
-        check_iterations: 2000,
+        check_iterations: 10_000,
         images: vec![
             ImageConfig {
                 min_iterations: 0,
-                max_iterations: 100,
+                max_iterations: 10,
 
-                width: 1000,
-                height: 1000,
+                width: 30_000,
+                height: 30_000,
 
                 min: Complex64::new(-2.0, -2.0),
                 max: Complex64::new(2.0, 2.0),
 
-                file_name: "image-1.mbh",
+                file_name: "image-0-10.mbh",
+            },
+            ImageConfig {
+                min_iterations: 10,
+                max_iterations: 20,
+
+                width: 30_000,
+                height: 30_000,
+
+                min: Complex64::new(-2.0, -2.0),
+                max: Complex64::new(2.0, 2.0),
+
+                file_name: "image-10-20.mbh",
+            },
+            ImageConfig {
+                min_iterations: 20,
+                max_iterations: 50,
+
+                width: 30_000,
+                height: 30_000,
+
+                min: Complex64::new(-2.0, -2.0),
+                max: Complex64::new(2.0, 2.0),
+
+                file_name: "image-20-50.mbh",
             },
             ImageConfig {
                 min_iterations: 50,
-                max_iterations: 500,
+                max_iterations: 100,
 
-                width: 1000,
-                height: 1000,
+                width: 30_000,
+                height: 30_000,
 
                 min: Complex64::new(-2.0, -2.0),
                 max: Complex64::new(2.0, 2.0),
 
-                file_name: "image-2.mbh",
+                file_name: "image-50-100.mbh",
+            },
+            ImageConfig {
+                min_iterations: 100,
+                max_iterations: 200,
+
+                width: 30_000,
+                height: 30_000,
+
+                min: Complex64::new(-2.0, -2.0),
+                max: Complex64::new(2.0, 2.0),
+
+                file_name: "image-10-200.mbh",
             },
             ImageConfig {
                 min_iterations: 200,
-                max_iterations: 2000,
+                max_iterations: 500,
 
-                width: 1000,
-                height: 1000,
+                width: 30_000,
+                height: 30_000,
 
                 min: Complex64::new(-2.0, -2.0),
                 max: Complex64::new(2.0, 2.0),
 
-                file_name: "image-3.mbh",
+                file_name: "image-20-500.mbh",
+            },
+            ImageConfig {
+                min_iterations: 500,
+                max_iterations: 1000,
+
+                width: 30_000,
+                height: 30_000,
+
+                min: Complex64::new(-2.0, -2.0),
+                max: Complex64::new(2.0, 2.0),
+
+                file_name: "image-500-1000.mbh",
+            },
+            ImageConfig {
+                min_iterations: 1000,
+                max_iterations: 2000,
+
+                width: 30_000,
+                height: 30_000,
+
+                min: Complex64::new(-2.0, -2.0),
+                max: Complex64::new(2.0, 2.0),
+
+                file_name: "image-1000-2000.mbh",
+            },
+            ImageConfig {
+                min_iterations: 2000,
+                max_iterations: 5000,
+
+                width: 30_000,
+                height: 30_000,
+
+                min: Complex64::new(-2.0, -2.0),
+                max: Complex64::new(2.0, 2.0),
+
+                file_name: "image-2000-5000.mbh",
+            },
+            ImageConfig {
+                min_iterations: 5000,
+                max_iterations: 10000,
+
+                width: 30_000,
+                height: 30_000,
+
+                min: Complex64::new(-2.0, -2.0),
+                max: Complex64::new(2.0, 2.0),
+
+                file_name: "image-5000-10000.mbh",
             },
         ],
+
 
         eta_section: 10,
         eta_time: 1000,
@@ -180,6 +265,9 @@ fn generate(config: Config<'static>) {
     }
 
     for thread_id in 0..config.threads {
+        // TODO this really has to be cleaned up.
+
+        // TODO investigate large performance degredation in comparision to single image(Reference: 48e52238)
         let mut location_generator = location_generator.clone();
         let mut eta = eta.clone();
 
