@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io;
 
 use file_image;
+use num;
 
 use file;
 use vec;
@@ -39,26 +40,20 @@ impl ImageData {
         values
     }
 
-    pub fn map_color1(&self, map: &Fn(u32) -> u8) -> Image {
-        let mapped = self.data.iter().map(|i| *i).map(map).collect::<Vec<_>>();
-
-        Image {
-            data: mapped,
-            color_type: file_image::Gray(8),
-
-            width: self.width,
-            height: self.height,
-        }
+    pub fn highest(&self) -> u32 {
+        *self.data.iter().max().unwrap()
     }
-    pub fn map_color3(&self, map: &Fn(u32) -> [u8; 3], color_type: file_image::ColorType) -> Image {
-        let mapped = self
-            .data
-            .iter()
-            .map(|i| *i)
-            .map(map)
-            .map(|a| vec![a[0], a[1], a[2]])
-            .flatten()
-            .collect::<Vec<_>>();
+    pub fn sum(&self) -> u32 {
+        self.data.iter().sum::<u32>()
+    }
+
+    pub fn map_to_image1(&self, map: &Fn(u32, u32) -> u8, color_type: file_image::ColorType) -> Image {
+        let highest = self.highest();
+
+        let mut mapped = Vec::with_capacity(self.data.len());
+        for i in &self.data {
+            mapped.push(map(*i, highest));
+        }
 
         Image {
             data: mapped,
@@ -68,57 +63,43 @@ impl ImageData {
             height: self.height,
         }
     }
-    pub fn map_color4(&self, map: &Fn(u32) -> [u8; 4], color_type: file_image::ColorType) -> Image {
-        let mapped = self
-            .data
-            .iter()
-            .map(|i| *i)
-            .map(map)
-            .map(|a| vec![a[0], a[1], a[2], a[3]])
-            .flatten()
-            .collect::<Vec<_>>();
+    pub fn map_to_grayscale_linear(&self, exposure: f64) -> Image {
+        self.map_to_image1(&|i, highest| num::clamp((i as f64 / highest as f64) * exposure * 255.0, 0.0, 255.0) as u8, file_image::Gray(8))
+    }
 
-        Image {
-            data: mapped,
-            color_type: color_type,
+    // TODO map_to_image3/4 methods for converting single picture to color
 
-            width: self.width,
-            height: self.height,
+
+
+    pub fn map(&mut self, map: &Fn(u32) -> u32) -> &mut ImageData {
+        for i in &mut self.data {
+            *i = map(*i);
         }
+
+        self
     }
 
-    pub fn map_linear_height(&self) -> Image {
-        let highest = *self.data.iter().max().unwrap();
 
-        self.map_color1(&|i| ((i as f64 / highest as f64) * 255.0) as u8)
-    }
+    // pub fn map_linear_count(&self, minimum_height: u32) -> Image {
+    //     let heights = self.count_heights();
+    //     let sum: u64 = heights.values().skip(minimum_height as usize).sum();
 
-    pub fn map_sqrt_height(&self) -> Image {
-        let highest = (*self.data.iter().max().unwrap() as f64).sqrt();
+    //     let mut current_sum = 0;
 
-        self.map_color1(&|i| (((i as f64).sqrt() / highest as f64) * 255.0) as u8)
-    }
+    //     let height_colors = heights
+    //         .iter()
+    //         .map(|(height, count)| (*height, *count))
+    //         .map(|(height, count)| {
+    //             if height < minimum_height {
+    //                 (height, 0)
+    //             } else {
+    //                 current_sum += count;
+    //                 (height, (current_sum / (sum / 255)) as u8)
+    //             }
+    //         }).collect::<BTreeMap<_, _>>();
 
-    pub fn map_linear_count(&self, minimum_height: u32) -> Image {
-        let heights = self.count_heights();
-        let sum: u64 = heights.values().skip(minimum_height as usize).sum();
-
-        let mut current_sum = 0;
-
-        let height_colors = heights
-            .iter()
-            .map(|(height, count)| (*height, *count))
-            .map(|(height, count)| {
-                if height < minimum_height {
-                    (height, 0)
-                } else {
-                    current_sum += count;
-                    (height, (current_sum / (sum / 255)) as u8)
-                }
-            }).collect::<BTreeMap<_, _>>();
-
-        self.map_color1(&|i| *height_colors.get(&i).unwrap())
-    }
+    //     self.map_color1(&|i| *height_colors.get(&i).unwrap())
+    // }
 }
 
 pub struct Image {
@@ -130,7 +111,12 @@ pub struct Image {
     height: usize,
 }
 impl Image {
-    pub fn join(image1: &Image, image2: &Image, image3: &Image, color_type: file_image::ColorType) -> Image {
+    pub fn join(
+        image1: &Image,
+        image2: &Image,
+        image3: &Image,
+        color_type: file_image::ColorType,
+    ) -> Image {
         let mut data = Vec::with_capacity(image1.data.len() * 3);
 
         for i in 0..image1.data.len() {

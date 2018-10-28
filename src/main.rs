@@ -29,7 +29,7 @@ impl CalculateNext {
 impl math::CalculateNext for CalculateNext {
     fn next(&mut self, z: Complex64) -> Complex64 {
         z * z + self.c
-        // z * z * z * Complex64::new((z.re * z.im).cos(), (self.c.re * self.c.im).cos()) + self.c
+        // z * z * z * Complex64::new((z.re * self.c.im).cos(), (self.c.re * z.im).cos()) + self.c
     }
 }
 
@@ -79,13 +79,13 @@ fn main() {
         scan_min: Complex64::new(-2.0, -2.0),
         scan_max: Complex64::new(2.0, 2.0),
         iterations: 10_000,
-        samples: 5e7 as usize,
+        samples: 1e7 as usize,
         sample_section: 1e6 as usize,
 
-        eta_section: 10_000,
+        eta_section: 10,
         eta_time: 1000,
 
-        threads: 16,
+        threads: 12,
         channel_buffer: 50,
         thread_buffer: 1_000_000,
 
@@ -151,47 +151,54 @@ fn generate(config: Config<'static>) {
                 let mut result_cache1 = Vec::with_capacity(config.thread_buffer);
                 let mut result_cache2 = Vec::with_capacity(config.thread_buffer);
                 let mut result_cache3 = Vec::with_capacity(config.thread_buffer);
+
                 while let Some(c) = location_generator.next_location() {
                     eta.count();
 
-                    //if math::is_inside_mandelbrot_bulb(c) {
-                    //    continue;
-                    //}
-                    match math::calculate_bailout_iteration(
+                    if math::is_inside_mandelbrot_bulb(c) {
+                        continue;
+                    }
+
+                    if let Some(bailout) = math::calculate_bailout_iteration(
                         &mut config.function.get(c),
                         config.initial_z,
                         config.bailout_min,
                         config.bailout_max,
                         config.iterations,
                     ) {
-                        Some(0...100) => math::calculate_iteration_values(
-                            &mut config.function.get(c),
-                            config.initial_z,
-                            config.bailout_min,
-                            config.bailout_max,
-                            0,
-                            config.iterations,
-                            &mut result_cache1,
-                        ),
-                        Some(100...1000) => math::calculate_iteration_values(
-                            &mut config.function.get(c),
-                            config.initial_z,
-                            config.bailout_min,
-                            config.bailout_max,
-                            0,
-                            config.iterations,
-                            &mut result_cache2,
-                        ),
-                        Some(1000...10000) => math::calculate_iteration_values(
-                            &mut config.function.get(c),
-                            config.initial_z,
-                            config.bailout_min,
-                            config.bailout_max,
-                            0,
-                            config.iterations,
-                            &mut result_cache3,
-                        ),
-                        _ => {}
+                        if bailout < 100 {
+                            math::calculate_iteration_values(
+                                &mut config.function.get(c),
+                                config.initial_z,
+                                config.bailout_min,
+                                config.bailout_max,
+                                0,
+                                100,
+                                &mut result_cache1,
+                            );
+                        }
+                        if bailout < 1000 {
+                            math::calculate_iteration_values(
+                                &mut config.function.get(c),
+                                config.initial_z,
+                                config.bailout_min,
+                                config.bailout_max,
+                                0,
+                                1000,
+                                &mut result_cache2,
+                            );
+                        }
+                        if bailout < 10_000 {
+                            math::calculate_iteration_values(
+                                &mut config.function.get(c),
+                                config.initial_z,
+                                config.bailout_min,
+                                config.bailout_max,
+                                0,
+                                10_000,
+                                &mut result_cache3,
+                            );
+                        }
                     }
 
                     if result_cache1.len() > config.thread_buffer {
@@ -199,11 +206,11 @@ fn generate(config: Config<'static>) {
                         result_cache1 = Vec::with_capacity(config.thread_buffer);
                     }
                     if result_cache2.len() > config.thread_buffer {
-                        send_with_warning(&sender1, Some(result_cache2));
+                        send_with_warning(&sender2, Some(result_cache2));
                         result_cache2 = Vec::with_capacity(config.thread_buffer);
                     }
                     if result_cache3.len() > config.thread_buffer {
-                        send_with_warning(&sender1, Some(result_cache3));
+                        send_with_warning(&sender3, Some(result_cache3));
                         result_cache3 = Vec::with_capacity(config.thread_buffer);
                     }
                 }
@@ -272,29 +279,38 @@ fn run_aggregator(
 
 fn image(config: Config) {
     // TODO separate image size; downsampling
+    println!("Preparing color channels");
+
     let file_names = vec!["image-1.mbh", "image-2.mbh", "image-3.mbh"];
     let images = file_names
         .iter()
         .map(|file_name| {
+            println!("Loading image from {}", file_name);
             let mut file = OpenOptions::new()
                 .read(true)
                 .open(file_name)
                 .expect("Could not open file");
+
+            use std::f64::consts::E;
+            use num;
 
             image::ImageData::read_fully(
                 &mut file,
                 config.mbh_width as usize,
                 config.mbh_height as usize,
             ).expect("Could not read file")
-            .map_linear_height()
+            // .map(&|i: u32| ((i as f64).sqrt() * 10000.0) as u32)
+            // .map_to_grayscale_linear(1.0)
+            .map_to_image1(&|i, highest| num::clamp((1.0 - E.powf(-2.0 * (i as f64 / highest as f64))) * 255.0 * 2.0, 0.0, 255.0) as u8, file_image::Gray(8))
         }).collect::<Vec<image::Image>>();
 
     // TODO tiled writing?
 
+    println!("Joining images");
     let image = image::Image::join(
-        &images[0],
-        &images[1],
         &images[2],
+        &images[1],
+        &images[0],
         file_image::ColorType::RGB(8),
     );
 
