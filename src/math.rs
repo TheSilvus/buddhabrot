@@ -23,6 +23,7 @@ pub fn calculate_bailout_iteration<CN: CalculateNext>(
         let new_z = next.next(z);
         if new_z == z {
             iterations = max_iterations;
+            break;
         } else {
             z = new_z;
             iterations += 1;
