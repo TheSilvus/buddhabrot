@@ -7,6 +7,7 @@ use std::mem;
 use file;
 use math;
 use vec;
+use aggregators::Aggregator;
 
 pub struct FileAggregator {
     file: File,
@@ -118,8 +119,9 @@ impl FileAggregator {
         )?;
         Ok(())
     }
-
-    pub fn aggregate(&mut self, c: Complex64) {
+}
+impl Aggregator for FileAggregator {
+    fn aggregate(&mut self, c: Complex64) {
         if math::complex_between(self.file_min, c, self.file_max) {
             let (x, y) = math::complex_to_image(
                 c,
