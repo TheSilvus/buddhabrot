@@ -400,27 +400,30 @@ fn image(config: Config) {
     // TODO separate image size; downsampling
     println!("Preparing color channels");
 
-    for image in config.images {
-        println!("Loading image from {}", image.file_name);
-        let mut file = OpenOptions::new()
-            .read(true)
-            .open(image.file_name)
-            .expect("Could not open file");
+    // for image in config.images {
+    //     println!("Loading image from {}", image.file_name);
+    //     let mut file = OpenOptions::new()
+    //         .read(true)
+    //         .open(image.file_name)
+    //         .expect("Could not open file");
 
-        use num;
-        use std::f64::consts::E;
+    //     use num;
+    //     use std::f64::consts::E;
 
-        image::ImageData::read_fully(
-                &mut file,
-                image.width as usize,
-                image.height as usize,
-            ).expect("Could not read file")
-            // .map(&|i: u32| ((i as f64).sqrt() * 10000.0) as u32)
-            // .map_to_grayscale_linear(1.0)
-            .map_to_image1(&|i, highest| num::clamp((1.0 - E.powf(-2.0 * (i as f64 / highest as f64))) * 255.0 * 2.0, 0.0, 255.0) as u8, file_image::Gray(8))
-            .save(&(image.file_name.to_owned() + ".png"))
-            .unwrap();
-    }
+    //     image::ImageData::read_fully(
+    //             &mut file,
+    //             image.width as usize,
+    //             image.height as usize,
+    //         ).expect("Could not read file")
+    //         // .map(&|i: u32| ((i as f64).sqrt() * 10000.0) as u32)
+    //         // .map_to_grayscale_linear(1.0)
+    //         .map_to_image1(&|i, highest| num::clamp((1.0 - E.powf(-2.0 * (i as f64 / highest as f64))) * 255.0 * 2.0, 0.0, 255.0) as u8, file_image::Gray(8))
+    //         .save(&(image.file_name.to_owned() + ".png"))
+    //         .unwrap();
+    // }
+
+    
+
 
     // TODO tiled writing?
 

@@ -26,6 +26,14 @@ impl ImageData {
         })
     }
 
+    pub fn join(mut image1: ImageData, image2: ImageData) -> ImageData {
+        for (i, mut value) in image1.data.iter_mut().enumerate() {
+            *value = image2.data[i];
+        }
+
+        image1
+    }
+
     pub fn count_heights(&self) -> BTreeMap<u32, u64> {
         let mut values = BTreeMap::new();
 
