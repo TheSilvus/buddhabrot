@@ -1,9 +1,9 @@
+extern crate crossbeam;
 extern crate image as file_image;
 extern crate num;
 extern crate rand;
 
 use std::fs::OpenOptions;
-use std::sync::mpsc;
 use std::thread;
 
 use num::complex::Complex64;
@@ -15,6 +15,7 @@ pub mod image;
 pub mod location_generators;
 pub mod math;
 pub mod vec;
+use aggregators::Aggregator;
 use location_generators::LocationGenerator;
 
 #[derive(Clone, Copy)]
@@ -87,23 +88,23 @@ fn main() {
 
         scan_min: Complex64::new(-2.0, -2.0),
         scan_max: Complex64::new(2.0, 2.0),
-        samples: 2.5e10 as usize,
+        samples: 1.3e11 as usize,
         sample_section: 1e6 as usize,
 
         check_iterations: 10_000,
         images: vec![
-            ImageConfig {
-                min_iterations: 0,
-                max_iterations: 10,
+            // ImageConfig {
+            //     min_iterations: 0,
+            //     max_iterations: 10,
 
-                width: 30_000,
-                height: 30_000,
+            //     width: 30_000,
+            //     height: 30_000,
 
-                min: Complex64::new(-2.0, -2.0),
-                max: Complex64::new(2.0, 2.0),
+            //     min: Complex64::new(-2.0, -2.0),
+            //     max: Complex64::new(2.0, 2.0),
 
-                file_name: "image-0-10.mbh",
-            },
+            //     file_name: "image-0-10.mbh",
+            // },
             ImageConfig {
                 min_iterations: 10,
                 max_iterations: 20,
@@ -150,7 +151,7 @@ fn main() {
                 min: Complex64::new(-2.0, -2.0),
                 max: Complex64::new(2.0, 2.0),
 
-                file_name: "image-10-200.mbh",
+                file_name: "image-100-200.mbh",
             },
             ImageConfig {
                 min_iterations: 200,
@@ -162,7 +163,7 @@ fn main() {
                 min: Complex64::new(-2.0, -2.0),
                 max: Complex64::new(2.0, 2.0),
 
-                file_name: "image-20-500.mbh",
+                file_name: "image-200-500.mbh",
             },
             ImageConfig {
                 min_iterations: 500,
@@ -214,16 +215,15 @@ fn main() {
             },
         ],
 
-
         eta_section: 10,
         eta_time: 1000,
 
-        threads: 4,
-        channel_buffer: 50,
-        thread_buffer: 1_000_000,
+        threads: 16,
+        channel_buffer: 4,
+        thread_buffer: 1e6 as usize,
 
-        file_buffer_size: 1e6 as usize,
-        pixel_buffer_cutoff_size: 1e6 as usize,
+        file_buffer_size: 1e7 as usize,
+        pixel_buffer_cutoff_size: 3e6 as usize,
 
         image_file_name: "image.png",
     };
@@ -235,7 +235,7 @@ fn main() {
 fn generate(config: Config<'static>) {
     println!(
         "Estimated maximum RAM usage: {}mb",
-        ((config.threads + config.channel_buffer) * config.thread_buffer * 2 * 8
+        ((config.threads + config.channel_buffer) * config.thread_buffer * 2 * 8 * config.images.len()
             + (config
                 .images
                 .iter()
@@ -243,7 +243,8 @@ fn generate(config: Config<'static>) {
                 .sum::<usize>()
                 / config.file_buffer_size
                 + 1)
-                * config.pixel_buffer_cutoff_size)
+                * config.pixel_buffer_cutoff_size
+                * 4)
             / 1000000
     );
 
@@ -259,7 +260,7 @@ fn generate(config: Config<'static>) {
     let mut receivers = vec![];
     for _ in &config.images {
         let (sender, receiver) =
-            mpsc::sync_channel::<Option<Vec<Complex64>>>(config.channel_buffer);
+            crossbeam::channel::bounded::<Option<Vec<Complex64>>>(config.channel_buffer);
         senders.push(sender);
         receivers.push(receiver);
     }
@@ -328,26 +329,45 @@ fn generate(config: Config<'static>) {
             }).expect("Unable to start thread");
     }
 
+    let mut aggregators = vec![];
+
     let mut handles = Vec::<thread::JoinHandle<()>>::new();
     for (i, receiver) in receivers.drain(..).enumerate() {
+        let image = &config.images[i];
+
+
+        let aggregator = aggregators::FileAggregator::create(
+            image.file_name,
+            image.width,
+            image.height,
+            image.min,
+            image.max,
+            config.file_buffer_size,
+            config.pixel_buffer_cutoff_size,
+        ).expect("Error while setting up aggregator");
+        // let aggregator = aggregators::MemoryAggregator::new(
+        //     image.file_name,
+        //     image.width,
+        //     image.height,
+        //     image.min,
+        //     image.max,
+        //     config.file_buffer_size,
+        // );
+
+        aggregators.push((receiver, aggregator));
+    }
+
+    println!("Finished setting up aggregators");
+
+    for (receiver, mut aggregator) in aggregators.drain(..) {
         let config = config.clone();
-        let image = config.images[i].clone();
 
         handles.push(
             thread::Builder::new()
                 .name("Aggregator".to_owned())
                 .spawn(move || {
-                    let mut aggregator = aggregators::FileAggregator::create(
-                        image.file_name,
-                        image.width,
-                        image.height,
-                        image.min,
-                        image.max,
-                        config.file_buffer_size,
-                        config.pixel_buffer_cutoff_size,
-                    ).expect("Error while setting up aggregator");
-
                     let mut received = 0;
+
                     while received < config.threads {
                         let result = receiver.recv().unwrap();
                         if let Some(result) = result {
@@ -367,17 +387,13 @@ fn generate(config: Config<'static>) {
     }
 }
 fn send_with_warning(
-    sender: &mpsc::SyncSender<Option<Vec<Complex64>>>,
+    sender: &crossbeam::Sender<Option<Vec<Complex64>>>,
     value: Option<Vec<Complex64>>,
 ) {
-    match sender.try_send(value) {
-        Ok(_) => {}
-        Err(mpsc::TrySendError::Full(result_cache)) => {
-            println!("Bottleneck while sending");
-            sender.send(result_cache).unwrap();
-        }
-        _ => panic!(),
+    if sender.is_full() {
+        println!("Bottleneck while sending");
     }
+    sender.send(value);
 }
 
 fn image(config: Config) {

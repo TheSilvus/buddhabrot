@@ -13,6 +13,8 @@ impl ETA {
             start: Instant::now(),
             timeout,
             total,
+
+            last_current: AtomicUsize::new(0),
             current: AtomicUsize::new(0),
         });
         ETAStore::run_thread(eta_store.clone());
@@ -50,6 +52,8 @@ struct ETAStore {
     start: Instant,
     timeout: u64,
     total: usize,
+    
+    last_current: AtomicUsize,
     current: AtomicUsize,
 }
 impl ETAStore {
@@ -60,6 +64,7 @@ impl ETAStore {
     fn print(&self) {
         let duration = self.start.elapsed();
         let current = self.current.load(Ordering::Relaxed);
+        let last_current = self.last_current.load(Ordering::Relaxed);
 
         let duration = duration.as_secs() as f64
             + duration.subsec_millis() as f64 * 1e-3
@@ -67,15 +72,18 @@ impl ETAStore {
 
         let estimated_left = (duration * (self.total as f64 / current as f64) - duration) as u64;
         println!(
-            "ETA: {}h{:02}m{:02}s; {} / {}; {:.5}%; {:.2} samples/s",
+            "ETA: {}h{:02}m{:02}s; {} / {}; {:.5}%; {:.2} samples/s; {} last frame",
             estimated_left / (60 * 60),
             (estimated_left / 60) % 60,
             estimated_left % 60,
             current,
             self.total,
             (current as f64 / self.total as f64) * 100.0,
-            current as f64 / duration
+            current as f64 / duration,
+            current - last_current,
         );
+
+        self.last_current.store(current, Ordering::Relaxed);
     }
 
     fn run_thread(store: Arc<ETAStore>) {
