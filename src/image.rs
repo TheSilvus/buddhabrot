@@ -67,6 +67,23 @@ impl ImageData {
         self.map_to_image1(&|i, highest| num::clamp((i as f64 / highest as f64) * exposure * 255.0, 0.0, 255.0) as u8, file_image::Gray(8))
     }
 
+
+    pub fn map_to_image3(&self, map: &Fn(u32, u32) -> [u8; 3], color_type: file_image::ColorType) -> Image {
+        let highest = self.highest();
+
+        let mut mapped = Vec::with_capacity(self.data.len());
+        for i in &self.data {
+            mapped.extend(map(*i, highest).iter());
+        }
+
+        Image {
+            data: mapped,
+            color_type: color_type,
+
+            width: self.width,
+            height: self.height,
+        }
+    }
     // TODO map_to_image3/4 methods for converting single picture to color
 
 
